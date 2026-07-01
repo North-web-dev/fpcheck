@@ -143,9 +143,15 @@ func cmdDiff(args []string) int {
 }
 
 func fetch(url string) (*model.Fingerprint, error) {
+	// ForceAttemptHTTP2 is required: with a custom TLSClientConfig the transport
+	// otherwise stays on HTTP/1.1, so the server never sees an h2 preface and the
+	// Akamai fingerprint comes back empty.
 	client := &http.Client{
-		Timeout:   10 * time.Second,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig:   &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"h2", "http/1.1"}},
+			ForceAttemptHTTP2: true,
+		},
 	}
 	resp, err := client.Get(url)
 	if err != nil {
