@@ -1,6 +1,6 @@
 # fpcheck
 
-[![CI](https://github.com/North-web-dev/fpcheck/actions/workflows/ci.yml/badge.svg)](https://github.com/North-web-dev/fpcheck/actions/workflows/ci.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/North-web-dev/fpcheck)](https://goreportcard.com/report/github.com/North-web-dev/fpcheck) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/North-web-dev/fpcheck?sort=semver)](https://github.com/North-web-dev/fpcheck/releases)
+[![CI](https://github.com/North-web-dev/fpcheck/actions/workflows/ci.yml/badge.svg)](https://github.com/North-web-dev/fpcheck/actions/workflows/ci.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/North-web-dev/fpcheck)](https://goreportcard.com/report/github.com/North-web-dev/fpcheck) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/North-web-dev/fpcheck?display_name=tag&sort=semver)](https://github.com/North-web-dev/fpcheck/releases)
 
 
 A self-hostable TLS/HTTP2 fingerprint tester and differ. It terminates TLS,
