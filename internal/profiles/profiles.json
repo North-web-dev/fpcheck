@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "note": "Reference fingerprints for common browsers. JA4 a-segments and Akamai HTTP/2 strings are stable and well documented; JA4 b/c hashes drift between browser builds. Treat entries marked approximate as guidance and capture your own reference with `fpcheck report` against the exact browser you target.",
+  "profiles": [
+    {
+      "name": "chrome131",
+      "description": "Chrome 120-131 desktop (Windows/macOS/Linux)",
+      "accuracy": "verified: ja4 a+b stable across Chrome 120-131; c matches ~Chrome 124-131",
+      "ja4": "t13d1516h2_8daaf6152771_b0da82dd1658",
+      "akamai_h2": "1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p"
+    },
+    {
+      "name": "chrome142",
+      "description": "Chrome 133+ desktop (after the post-131 signature-algorithm change)",
+      "accuracy": "approximate: ja4 a+b stable as Chrome, c changed after 131 - capture locally to pin c",
+      "ja4": "t13d1516h2_8daaf6152771",
+      "akamai_h2": "1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p"
+    },
+    {
+      "name": "firefox",
+      "description": "Firefox desktop (recent)",
+      "accuracy": "approximate: ja4 a-segment verified (t13d1715h2); hashes vary by version",
+      "ja4": "t13d1715h2",
+      "akamai_h2": "1:65536;4:131072;5:16384|12517377|3:0:0:201,5:0:0:101,7:0:0:1,9:0:7:1,11:0:3:1,13:0:0:241|m,p,a,s"
+    },
+    {
+      "name": "safari",
+      "description": "Safari 17 desktop (macOS)",
+      "accuracy": "approximate: verify locally",
+      "ja4": "t13d1913h2",
+      "akamai_h2": "4:4194304;3:100|10485760|0|m,s,a,p"
+    }
+  ]
+}
