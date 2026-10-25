@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/North-web-dev/fpcheck/internal/profiles"
+
 	"github.com/North-web-dev/fpcheck/internal/h2fp"
 	"github.com/North-web-dev/fpcheck/internal/ja3"
 	"github.com/North-web-dev/fpcheck/internal/ja4"
@@ -126,9 +128,54 @@ func render(fp *model.Fingerprint, path string) []byte {
 	return []byte(buildPage(fp, pretty))
 }
 
+// ja4ASeg returns the JA4 "a" segment (before the first '_'), which is stable
+// across browser builds while the b/c hash segments drift.
+func ja4ASeg(ja4 string) string {
+	if i := strings.IndexByte(ja4, '_'); i > 0 {
+		return ja4[:i]
+	}
+	return ja4
+}
+
+// classify compares the observed fingerprint against the bundled reference
+// profiles and returns a human verdict plus a level (good/warn/bad).
+func classify(fp *model.Fingerprint) (string, string) {
+	best := ""
+	bestScore := 0
+	for _, n := range profiles.Names() {
+		_, p, err := profiles.Get(n)
+		if err != nil || p == nil {
+			continue
+		}
+		score := 0
+		switch {
+		case p.JA4 != "" && p.JA4 == fp.JA4:
+			score = 4
+		case p.JA4 != "" && fp.JA4 != "" && ja4ASeg(p.JA4) == ja4ASeg(fp.JA4):
+			score = 2
+		}
+		if p.AkamaiH2 != "" && p.AkamaiH2 == fp.AkamaiH2 {
+			score++
+		}
+		if score > bestScore {
+			bestScore, best = score, p.Name
+		}
+	}
+	switch {
+	case bestScore >= 4:
+		return "matches " + best, "good"
+	case bestScore >= 2:
+		return "looks like " + best + " — TLS shape matches (JA4 b/c drift between builds is normal)", "good"
+	case bestScore == 1:
+		return "partial match: " + best + " (HTTP/2 only)", "warn"
+	default:
+		return "no known browser match — likely a non-browser client (curl, a library, or a bot)", "bad"
+	}
+}
+
 // buildPage renders the branded HTML view served on any non-API path. Values
-// that originate from the client (user-agent, SNI) are HTML-escaped; the JSON
-// block is produced by encoding/json, which escapes <, >, & by default.
+// that originate from the client (user-agent, SNI, ALPN) are HTML-escaped; the
+// JSON block is produced by encoding/json, which escapes <, >, & by default.
 func buildPage(fp *model.Fingerprint, pretty []byte) string {
 	esc := html.EscapeString
 	card := func(label, val string) string {
@@ -137,38 +184,75 @@ func buildPage(fp *model.Fingerprint, pretty []byte) string {
 		}
 		return fmt.Sprintf(`<div class=card><div class=lbl>%s</div><div class=val>%s</div></div>`, label, esc(val))
 	}
+	chips := func(items []string) string {
+		if len(items) == 0 {
+			return `<span class=mut>—</span>`
+		}
+		var b strings.Builder
+		for _, it := range items {
+			b.WriteString(`<span class=chip>` + esc(it) + `</span>`)
+		}
+		return b.String()
+	}
+	section := func(title, body string) string {
+		return `<div class=sec><div class=sh>` + esc(title) + `</div>` + body + `</div>`
+	}
+
+	verdict, level := classify(fp)
 	cards := card("JA4", fp.JA4) + card("JA3 hash", fp.JA3Hash) +
 		card("JA4H", fp.JA4H) + card("Akamai HTTP/2", fp.AkamaiH2)
 	ua := esc(fp.UserAgent)
 	if ua == "" {
 		ua = "—"
 	}
+	t := &fp.TLSDetail
+	tlsMeta := `<div class=kv><span>version</span><b>` + esc(t.Version) + `</b></div>` +
+		`<div class=kv><span>SNI</span><b>` + esc(t.SNI) + `</b></div>` +
+		`<div class=kv><span>ALPN</span><b>` + esc(strings.Join(t.ALPN, ", ")) + `</b></div>`
+	tlsBody := tlsMeta +
+		`<div class=cl>cipher suites</div><div class=chips>` + chips(t.CipherSuites) + `</div>` +
+		`<div class=cl>extensions</div><div class=chips>` + chips(t.Extensions) + `</div>` +
+		`<div class=cl>supported groups</div><div class=chips>` + chips(t.SupportedGroups) + `</div>` +
+		`<div class=cl>signature algorithms</div><div class=chips>` + chips(t.SignatureAlgorithms) + `</div>`
+
+	httpBody := `<div class=kv><span>Akamai h2</span><b>` + esc(fp.AkamaiH2) + `</b></div>`
+	if len(fp.HeaderOrder) > 0 {
+		httpBody += `<div class=cl>header order</div><div class=chips>` + chips(fp.HeaderOrder) + `</div>`
+	}
+
 	return `<!doctype html><html lang=en><head><meta charset=utf-8>` +
 		`<meta name=viewport content="width=device-width,initial-scale=1">` +
 		`<title>fpcheck — your TLS fingerprint</title><style>` +
-		`:root{--bg:#0a1726;--panel:#0d2338;--foam:#f4ead2;--foamc:#eef5fb;--mute:#9fb8cc;--shu:#e34234;--kin:#d9a441;--wavel:#7fa8c9;--mono:ui-monospace,"JetBrains Mono","DejaVu Sans Mono",monospace}` +
+		`:root{--bg:#0a1726;--panel:#0d2338;--p2:#102a44;--foam:#f4ead2;--foamc:#eef5fb;--mute:#9fb8cc;--shu:#e34234;--kin:#d9a441;--wavel:#7fa8c9;--good:#4d86b5;--mono:ui-monospace,"JetBrains Mono","DejaVu Sans Mono",monospace}` +
 		`*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--foamc);font-family:var(--mono);line-height:1.55;background-image:repeating-radial-gradient(circle at 50% 120%,#1b3a5b22 0 2px,transparent 2px 30px)}` +
-		`.wrap{max-width:900px;margin:0 auto;padding:28px 20px 60px}` +
-		`.hd{display:flex;align-items:center;gap:14px}` +
-		`.seal{width:48px;height:48px;border-radius:9px;background:var(--shu);color:#fbe9df;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;box-shadow:inset 0 0 0 2px #fbe9df55}` +
-		`h1{font-size:26px;margin:0;color:var(--foam);letter-spacing:1px}` +
-		`.tag{color:var(--mute);font-size:13px;margin:6px 0 22px}` +
-		`.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}` +
-		`@media(max-width:620px){.grid{grid-template-columns:1fr}}` +
+		`.wrap{max-width:900px;margin:0 auto;padding:28px 20px 64px}` +
+		`.hd{display:flex;align-items:center;gap:14px}.seal{width:48px;height:48px;border-radius:9px;background:var(--shu);color:#fbe9df;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;box-shadow:inset 0 0 0 2px #fbe9df55}` +
+		`h1{font-size:26px;margin:0;color:var(--foam);letter-spacing:1px}.tag{color:var(--mute);font-size:13px;margin:6px 0 20px}` +
+		`.verdict{border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:14px;border:1px solid}` +
+		`.verdict.good{background:#12314c;border-color:#4d86b5aa;color:#cfe4f2}.verdict.warn{background:#3a2f12;border-color:#d9a441aa;color:#f1e3bd}.verdict.bad{background:#3a1512;border-color:#e3423488;color:#f6d0cb}` +
+		`.verdict b{color:var(--foam)}` +
+		`.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}@media(max-width:620px){.grid{grid-template-columns:1fr}}` +
 		`.card{background:var(--panel);border:1px solid #d9a44133;border-left:3px solid var(--shu);border-radius:10px;padding:12px 14px}` +
-		`.lbl{color:var(--kin);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}` +
-		`.val{color:var(--foam);font-size:14px;word-break:break-all;user-select:all}` +
-		`.ua{color:var(--mute);font-size:12px;margin:0 0 16px;word-break:break-all}` +
-		`.rule{height:1px;background:linear-gradient(90deg,transparent,#d9a44155 20%,#d9a44155 80%,transparent);margin:16px 0}` +
-		`pre{background:#07111d;border:1px solid #1b3a5b;border-radius:10px;padding:16px;overflow:auto;font-size:12.5px;color:var(--foamc);max-height:460px}` +
+		`.lbl{color:var(--kin);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}.val{color:var(--foam);font-size:14px;word-break:break-all;user-select:all}` +
+		`.ua{color:var(--mute);font-size:12px;margin:0 0 18px;word-break:break-all}` +
+		`.sec{background:var(--panel);border:1px solid #1b3a5b;border-radius:10px;padding:14px 16px;margin-bottom:14px}` +
+		`.sh{color:var(--kin);font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px}` +
+		`.kv{display:flex;justify-content:space-between;gap:12px;padding:3px 0;font-size:13px;color:var(--mute)}.kv b{color:var(--foamc);font-weight:600;word-break:break-all;text-align:right}` +
+		`.cl{color:var(--mute);font-size:11px;letter-spacing:1px;margin:12px 0 6px}` +
+		`.chips{display:flex;flex-wrap:wrap;gap:6px}.chip{background:var(--p2);border:1px solid #2e5f8655;border-radius:6px;padding:2px 8px;font-size:12px;color:var(--foamc);user-select:all}.mut{color:var(--mute)}` +
+		`details{margin-top:4px}summary{color:var(--wavel);cursor:pointer;font-size:13px}` +
+		`pre{background:#07111d;border:1px solid #1b3a5b;border-radius:10px;padding:16px;overflow:auto;font-size:12.5px;color:var(--foamc);max-height:460px;margin-top:10px}` +
 		`a{color:var(--wavel)}a:hover{color:var(--foam)}.ft{color:var(--mute);font-size:12px;margin-top:18px}` +
 		`</style></head><body><div class=wrap>` +
 		`<div class=hd><span class=seal>北</span><h1>fpcheck</h1></div>` +
 		`<div class=tag>your TLS / HTTP2 fingerprint, exactly as the server reads it off the wire</div>` +
+		`<div class="verdict ` + level + `">` + esc(verdict) + `</div>` +
 		`<div class=grid>` + cards + `</div>` +
 		`<div class=ua>UA&nbsp;·&nbsp;` + ua + `</div>` +
-		`<div class=rule></div><pre>` + string(pretty) + `</pre>` +
-		`<div class=ft>raw JSON: <a href="/api/all">/api/all</a> &nbsp;·&nbsp; <a href="https://github.com/North-web-dev/fpcheck">github.com/North-web-dev/fpcheck</a></div>` +
+		section("TLS ClientHello", tlsBody) +
+		section("HTTP/2", httpBody) +
+		`<details><summary>raw JSON</summary><pre>` + string(pretty) + `</pre></details>` +
+		`<div class=ft><a href="/api/all">/api/all</a> &nbsp;·&nbsp; <a href="https://github.com/North-web-dev/fpcheck">github.com/North-web-dev/fpcheck</a></div>` +
 		`</div></body></html>`
 }
 
