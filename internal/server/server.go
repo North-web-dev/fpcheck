@@ -106,7 +106,11 @@ func (s *Server) handle(raw net.Conn) {
 		}
 		applyHTTP(&fp, info.Request, info.HeaderOrder)
 		fp.AkamaiH2 = info.Akamai
-		h2fp.WriteJSON(tlsConn, info.StreamID, render(&fp, info.Path))
+		ct := "text/html; charset=utf-8"
+		if info.Path == "/api/all" {
+			ct = "application/json"
+		}
+		h2fp.WriteResponse(tlsConn, info.StreamID, render(&fp, info.Path), ct)
 		return
 	}
 

@@ -199,12 +199,13 @@ func prioOrZero(p []string) string {
 	return strings.Join(p, ",")
 }
 
-// WriteJSON sends a minimal HTTP/2 response (200 with a JSON body) on streamID.
-func WriteJSON(w io.Writer, streamID uint32, body []byte) error {
+// WriteResponse sends a minimal HTTP/2 200 response with the given body and
+// content-type on streamID, then closes the stream and connection cleanly.
+func WriteResponse(w io.Writer, streamID uint32, body []byte, contentType string) error {
 	var hb strings.Builder
 	enc := hpack.NewEncoder(&hb)
 	_ = enc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
-	_ = enc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/json"})
+	_ = enc.WriteField(hpack.HeaderField{Name: "content-type", Value: contentType})
 	if err := writeFrame(w, frameHeaders, flagEndHeaders, streamID, []byte(hb.String())); err != nil {
 		return err
 	}
@@ -212,6 +213,11 @@ func WriteJSON(w io.Writer, streamID uint32, body []byte) error {
 		return err
 	}
 	return WriteGoAway(w, streamID)
+}
+
+// WriteJSON sends a JSON HTTP/2 response on streamID.
+func WriteJSON(w io.Writer, streamID uint32, body []byte) error {
+	return WriteResponse(w, streamID, body, "application/json")
 }
 
 // WriteGoAway sends a GOAWAY frame (last-stream-id, NO_ERROR) so the client
