@@ -13,6 +13,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"math/big"
 	"net"
@@ -122,10 +123,53 @@ func render(fp *model.Fingerprint, path string) []byte {
 	if path == "/api/all" {
 		return pretty
 	}
-	page := "<!doctype html><meta charset=utf-8><title>fpcheck</title>" +
-		"<style>body{background:#0d1117;color:#c9d1d9;font:14px monospace;padding:24px}</style>" +
-		"<h2>fpcheck</h2><pre>" + string(pretty) + "</pre>"
-	return []byte(page)
+	return []byte(buildPage(fp, pretty))
+}
+
+// buildPage renders the branded HTML view served on any non-API path. Values
+// that originate from the client (user-agent, SNI) are HTML-escaped; the JSON
+// block is produced by encoding/json, which escapes <, >, & by default.
+func buildPage(fp *model.Fingerprint, pretty []byte) string {
+	esc := html.EscapeString
+	card := func(label, val string) string {
+		if val == "" {
+			val = "—"
+		}
+		return fmt.Sprintf(`<div class=card><div class=lbl>%s</div><div class=val>%s</div></div>`, label, esc(val))
+	}
+	cards := card("JA4", fp.JA4) + card("JA3 hash", fp.JA3Hash) +
+		card("JA4H", fp.JA4H) + card("Akamai HTTP/2", fp.AkamaiH2)
+	ua := esc(fp.UserAgent)
+	if ua == "" {
+		ua = "—"
+	}
+	return `<!doctype html><html lang=en><head><meta charset=utf-8>` +
+		`<meta name=viewport content="width=device-width,initial-scale=1">` +
+		`<title>fpcheck — your TLS fingerprint</title><style>` +
+		`:root{--bg:#0a1726;--panel:#0d2338;--foam:#f4ead2;--foamc:#eef5fb;--mute:#9fb8cc;--shu:#e34234;--kin:#d9a441;--wavel:#7fa8c9;--mono:ui-monospace,"JetBrains Mono","DejaVu Sans Mono",monospace}` +
+		`*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--foamc);font-family:var(--mono);line-height:1.55;background-image:repeating-radial-gradient(circle at 50% 120%,#1b3a5b22 0 2px,transparent 2px 30px)}` +
+		`.wrap{max-width:900px;margin:0 auto;padding:28px 20px 60px}` +
+		`.hd{display:flex;align-items:center;gap:14px}` +
+		`.seal{width:48px;height:48px;border-radius:9px;background:var(--shu);color:#fbe9df;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;box-shadow:inset 0 0 0 2px #fbe9df55}` +
+		`h1{font-size:26px;margin:0;color:var(--foam);letter-spacing:1px}` +
+		`.tag{color:var(--mute);font-size:13px;margin:6px 0 22px}` +
+		`.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}` +
+		`@media(max-width:620px){.grid{grid-template-columns:1fr}}` +
+		`.card{background:var(--panel);border:1px solid #d9a44133;border-left:3px solid var(--shu);border-radius:10px;padding:12px 14px}` +
+		`.lbl{color:var(--kin);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}` +
+		`.val{color:var(--foam);font-size:14px;word-break:break-all;user-select:all}` +
+		`.ua{color:var(--mute);font-size:12px;margin:0 0 16px;word-break:break-all}` +
+		`.rule{height:1px;background:linear-gradient(90deg,transparent,#d9a44155 20%,#d9a44155 80%,transparent);margin:16px 0}` +
+		`pre{background:#07111d;border:1px solid #1b3a5b;border-radius:10px;padding:16px;overflow:auto;font-size:12.5px;color:var(--foamc);max-height:460px}` +
+		`a{color:var(--wavel)}a:hover{color:var(--foam)}.ft{color:var(--mute);font-size:12px;margin-top:18px}` +
+		`</style></head><body><div class=wrap>` +
+		`<div class=hd><span class=seal>北</span><h1>fpcheck</h1></div>` +
+		`<div class=tag>your TLS / HTTP2 fingerprint, exactly as the server reads it off the wire</div>` +
+		`<div class=grid>` + cards + `</div>` +
+		`<div class=ua>UA&nbsp;·&nbsp;` + ua + `</div>` +
+		`<div class=rule></div><pre>` + string(pretty) + `</pre>` +
+		`<div class=ft>raw JSON: <a href="/api/all">/api/all</a> &nbsp;·&nbsp; <a href="https://github.com/North-web-dev/fpcheck">github.com/North-web-dev/fpcheck</a></div>` +
+		`</div></body></html>`
 }
 
 func applyHTTP(fp *model.Fingerprint, req ja4.Request, order []string) {
