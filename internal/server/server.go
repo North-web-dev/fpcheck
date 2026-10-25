@@ -203,8 +203,9 @@ func buildPage(fp *model.Fingerprint, pretty []byte) string {
 	}
 
 	verdict, level := classify(fp)
-	cards := card("JA4", fp.JA4) + card("JA3 hash", fp.JA3Hash) +
-		card("JA4H", fp.JA4H) + card("Akamai HTTP/2", fp.AkamaiH2)
+	vicon := map[string]string{"good": "✓", "warn": "!", "bad": "✕"}[level]
+	ja4hero := `<div class=hero-card><div class=lbl>JA4 · the stable fingerprint</div><div class=ja4>` + esc(fp.JA4) + `</div></div>`
+	small := card("JA3 hash", fp.JA3Hash) + card("JA4H", fp.JA4H) + card("Akamai HTTP/2", fp.AkamaiH2)
 	ua := esc(fp.UserAgent)
 	if ua == "" {
 		ua = "—"
@@ -226,32 +227,45 @@ func buildPage(fp *model.Fingerprint, pretty []byte) string {
 
 	return `<!doctype html><html lang=en><head><meta charset=utf-8>` +
 		`<meta name=viewport content="width=device-width,initial-scale=1">` +
-		`<title>fpcheck — your TLS fingerprint</title><style>` +
-		`:root{--bg:#0a1726;--panel:#0d2338;--p2:#102a44;--foam:#f4ead2;--foamc:#eef5fb;--mute:#9fb8cc;--shu:#e34234;--kin:#d9a441;--wavel:#7fa8c9;--good:#4d86b5;--mono:ui-monospace,"JetBrains Mono","DejaVu Sans Mono",monospace}` +
-		`*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--foamc);font-family:var(--mono);line-height:1.55;background-image:repeating-radial-gradient(circle at 50% 120%,#1b3a5b22 0 2px,transparent 2px 30px)}` +
-		`.wrap{max-width:900px;margin:0 auto;padding:28px 20px 64px}` +
-		`.hd{display:flex;align-items:center;gap:14px}.seal{width:48px;height:48px;border-radius:9px;background:var(--shu);color:#fbe9df;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;box-shadow:inset 0 0 0 2px #fbe9df55}` +
-		`h1{font-size:26px;margin:0;color:var(--foam);letter-spacing:1px}.tag{color:var(--mute);font-size:13px;margin:6px 0 20px}` +
-		`.verdict{border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:14px;border:1px solid}` +
-		`.verdict.good{background:#12314c;border-color:#4d86b5aa;color:#cfe4f2}.verdict.warn{background:#3a2f12;border-color:#d9a441aa;color:#f1e3bd}.verdict.bad{background:#3a1512;border-color:#e3423488;color:#f6d0cb}` +
-		`.verdict b{color:var(--foam)}` +
-		`.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}@media(max-width:620px){.grid{grid-template-columns:1fr}}` +
-		`.card{background:var(--panel);border:1px solid #d9a44133;border-left:3px solid var(--shu);border-radius:10px;padding:12px 14px}` +
-		`.lbl{color:var(--kin);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}.val{color:var(--foam);font-size:14px;word-break:break-all;user-select:all}` +
-		`.ua{color:var(--mute);font-size:12px;margin:0 0 18px;word-break:break-all}` +
-		`.sec{background:var(--panel);border:1px solid #1b3a5b;border-radius:10px;padding:14px 16px;margin-bottom:14px}` +
-		`.sh{color:var(--kin);font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px}` +
-		`.kv{display:flex;justify-content:space-between;gap:12px;padding:3px 0;font-size:13px;color:var(--mute)}.kv b{color:var(--foamc);font-weight:600;word-break:break-all;text-align:right}` +
-		`.cl{color:var(--mute);font-size:11px;letter-spacing:1px;margin:12px 0 6px}` +
-		`.chips{display:flex;flex-wrap:wrap;gap:6px}.chip{background:var(--p2);border:1px solid #2e5f8655;border-radius:6px;padding:2px 8px;font-size:12px;color:var(--foamc);user-select:all}.mut{color:var(--mute)}` +
-		`details{margin-top:4px}summary{color:var(--wavel);cursor:pointer;font-size:13px}` +
-		`pre{background:#07111d;border:1px solid #1b3a5b;border-radius:10px;padding:16px;overflow:auto;font-size:12.5px;color:var(--foamc);max-height:460px;margin-top:10px}` +
-		`a{color:var(--wavel)}a:hover{color:var(--foam)}.ft{color:var(--mute);font-size:12px;margin-top:18px}` +
-		`</style></head><body><div class=wrap>` +
-		`<div class=hd><span class=seal>北</span><h1>fpcheck</h1></div>` +
-		`<div class=tag>your TLS / HTTP2 fingerprint, exactly as the server reads it off the wire</div>` +
-		`<div class="verdict ` + level + `">` + esc(verdict) + `</div>` +
-		`<div class=grid>` + cards + `</div>` +
+		`<title>fpcheck — your TLS fingerprint</title>` +
+		`<link rel=preconnect href="https://fonts.googleapis.com"><link rel=preconnect href="https://fonts.gstatic.com" crossorigin>` +
+		`<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel=stylesheet>` +
+		`<style>` +
+		`:root{--bg:#0a1726;--panel:#0d2338;--p2:#102a44;--foam:#f4ead2;--foamc:#eef5fb;--mute:#9fb8cc;--shu:#e34234;--kin:#d9a441;--wavel:#7fa8c9;--disp:"Space Grotesk",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,"DejaVu Sans Mono",monospace}` +
+		`*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--foamc);font-family:var(--mono);line-height:1.55}` +
+		`.hero{position:relative;overflow:hidden;background:linear-gradient(180deg,#071320,#0d2338 70%,#13314c);border-bottom:1px solid #d9a44133}` +
+		`.hero::before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle at 50% 118%,#2e5f8633 0 3px,transparent 3px 26px);opacity:.55}` +
+		`.hero-in{position:relative;max-width:900px;margin:0 auto;padding:42px 20px 36px;display:flex;align-items:center;gap:18px}` +
+		`.seal{width:62px;height:62px;border-radius:12px;background:var(--shu);color:#fbe9df;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;box-shadow:inset 0 0 0 2px #fbe9df55,0 6px 20px #e3423433;flex:none}` +
+		`.brand h1{font-family:var(--disp);font-size:34px;font-weight:700;margin:0;color:var(--foam);letter-spacing:.5px}` +
+		`.brand .tag{color:var(--wavel);font-size:13px;margin-top:4px}` +
+		`.wrap{max-width:900px;margin:0 auto;padding:26px 20px 72px}` +
+		`.verdict{display:flex;align-items:center;gap:12px;border-radius:12px;padding:16px 18px;margin-bottom:22px;font-size:15px;border:1px solid}` +
+		`.verdict .ic{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}` +
+		`.verdict.good{background:#12314c;border-color:#4d86b5aa;color:#dce9f4}.verdict.good .ic{background:#4d86b5;color:#06131f}` +
+		`.verdict.warn{background:#352c12;border-color:#d9a441aa;color:#f1e3bd}.verdict.warn .ic{background:#d9a441;color:#2a2008}` +
+		`.verdict.bad{background:#371512;border-color:#e3423488;color:#f6d0cb}.verdict.bad .ic{background:#e34234;color:#fff}` +
+		`.hero-card{background:linear-gradient(180deg,#102a44,#0d2338);border:1px solid #d9a44155;border-radius:14px;padding:16px 20px;margin-bottom:12px}` +
+		`.hero-card .ja4{font-weight:600;font-size:clamp(17px,3.6vw,25px);color:var(--foam);word-break:break-all;user-select:all;margin-top:6px}` +
+		`.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}@media(max-width:680px){.grid{grid-template-columns:1fr}}` +
+		`.card{background:var(--panel);border:1px solid #d9a44122;border-left:3px solid var(--shu);border-radius:10px;padding:12px 14px}` +
+		`.lbl{color:var(--kin);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}.val{color:var(--foamc);font-size:13.5px;word-break:break-all;user-select:all}` +
+		`.ua{color:var(--mute);font-size:12px;margin:0 0 20px;word-break:break-all}` +
+		`.sec{background:var(--panel);border:1px solid #1b3a5b;border-radius:12px;padding:16px 18px;margin-bottom:14px}` +
+		`.sh{font-family:var(--disp);color:var(--foam);font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}.sh::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--shu)}` +
+		`.kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:13px;color:var(--mute);border-bottom:1px solid #ffffff08}.kv b{color:var(--foamc);font-weight:600;word-break:break-all;text-align:right}` +
+		`.cl{color:var(--kin);font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;margin:14px 0 7px}` +
+		`.chips{display:flex;flex-wrap:wrap;gap:6px}.chip{background:var(--p2);border:1px solid #2e5f8655;border-radius:7px;padding:3px 9px;font-size:12px;color:var(--foamc);user-select:all}.mut{color:var(--mute)}` +
+		`details{margin-top:6px}summary{color:var(--wavel);cursor:pointer;font-size:13px;padding:6px 0}` +
+		`pre{background:#07111d;border:1px solid #1b3a5b;border-radius:12px;padding:16px;overflow:auto;font-size:12.5px;color:var(--foamc);max-height:460px;margin-top:10px}` +
+		`a{color:var(--wavel);text-decoration:none}a:hover{color:var(--foam)}.ft{color:var(--mute);font-size:12px;margin-top:22px;border-top:1px solid #ffffff10;padding-top:16px}` +
+		`</style></head><body>` +
+		`<div class=hero><div class=hero-in><span class=seal>北</span><div class=brand><h1>fpcheck</h1>` +
+		`<div class=tag>your TLS / HTTP2 fingerprint, exactly as the server reads it off the wire</div></div></div></div>` +
+		`<div class=wrap>` +
+		`<div class="verdict ` + level + `"><span class=ic>` + vicon + `</span><div>` + esc(verdict) + `</div></div>` +
+		ja4hero +
+		`<div class=grid>` + small + `</div>` +
 		`<div class=ua>UA&nbsp;·&nbsp;` + ua + `</div>` +
 		section("TLS ClientHello", tlsBody) +
 		section("HTTP/2", httpBody) +
