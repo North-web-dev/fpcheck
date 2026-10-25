@@ -1,0 +1,6 @@
+.git
+.github
+*.pem
+*.local
+/fpcheck
+README.md

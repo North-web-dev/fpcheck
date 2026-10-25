@@ -1,6 +1,7 @@
 package h2fp
 
 import (
+	"bytes"
 	"io"
 	"net"
 	"strings"
@@ -57,5 +58,43 @@ func TestReadRequest(t *testing.T) {
 	}
 	if info.StreamID != 1 {
 		t.Errorf("stream: got %d want 1", info.StreamID)
+	}
+}
+
+// TestWriteJSONFramesClosedCleanly checks that a response ends with a GOAWAY
+// frame. Without it, clients close the socket after the DATA frame see a
+// truncated connection (curl exit 56) even though the body arrived intact.
+func TestWriteJSONFramesClosedCleanly(t *testing.T) {
+	var buf bytes.Buffer
+	if err := WriteJSON(&buf, 3, []byte(`{"ok":true}`)); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	var types []byte
+	var sawEndStream, sawGoAway bool
+	r := bytes.NewReader(buf.Bytes())
+	for r.Len() > 0 {
+		ftype, flags, _, _, err := readFrame(r)
+		if err != nil {
+			t.Fatalf("readFrame: %v", err)
+		}
+		types = append(types, ftype)
+		if ftype == frameData && flags&flagEndStream != 0 {
+			sawEndStream = true
+		}
+		if ftype == frameGoAway {
+			sawGoAway = true
+		}
+	}
+
+	want := []byte{frameHeaders, frameData, frameGoAway}
+	if !bytes.Equal(types, want) {
+		t.Errorf("frame sequence: got %v want %v", types, want)
+	}
+	if !sawEndStream {
+		t.Error("DATA frame missing END_STREAM flag")
+	}
+	if !sawGoAway {
+		t.Error("response did not end with GOAWAY")
 	}
 }

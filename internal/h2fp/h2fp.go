@@ -28,6 +28,7 @@ const (
 	frameHeaders      = 0x1
 	framePriority     = 0x2
 	frameSettings     = 0x4
+	frameGoAway       = 0x7
 	frameWindowUpdate = 0x8
 )
 
@@ -207,7 +208,20 @@ func WriteJSON(w io.Writer, streamID uint32, body []byte) error {
 	if err := writeFrame(w, frameHeaders, flagEndHeaders, streamID, []byte(hb.String())); err != nil {
 		return err
 	}
-	return writeFrame(w, frameData, flagEndStream, streamID, body)
+	if err := writeFrame(w, frameData, flagEndStream, streamID, body); err != nil {
+		return err
+	}
+	return WriteGoAway(w, streamID)
+}
+
+// WriteGoAway sends a GOAWAY frame (last-stream-id, NO_ERROR) so the client
+// sees a clean HTTP/2 shutdown instead of a truncated connection when the
+// server closes the socket after a single response.
+func WriteGoAway(w io.Writer, lastStreamID uint32) error {
+	payload := make([]byte, 8)
+	binary.BigEndian.PutUint32(payload[0:], lastStreamID&0x7fffffff)
+	binary.BigEndian.PutUint32(payload[4:], 0) // NO_ERROR
+	return writeFrame(w, frameGoAway, 0, 0, payload)
 }
 
 func readFrame(r io.Reader) (ftype, flags byte, streamID uint32, payload []byte, err error) {

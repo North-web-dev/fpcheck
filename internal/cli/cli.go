@@ -21,13 +21,14 @@ import (
 const usage = `fpcheck - TLS/HTTP2 fingerprint tester and differ
 
 Usage:
-  fpcheck serve  [--addr :8443]
+  fpcheck serve  [--addr :8443] [--cert cert.pem --key key.pem]
   fpcheck report [--url https://host:8443/api/all]
   fpcheck run    [--url ...] -- <client command...>
   fpcheck diff   --target <profile> [--url ...]
 
 Commands:
-  serve   Run the fingerprinting server (self-signed cert, h2 + http/1.1).
+  serve   Run the fingerprinting server (h2 + http/1.1). Terminates TLS itself:
+          self-signed by default, or a real keypair via --cert/--key.
   report  Fetch /api/all and print the fingerprint the server saw.
   run     Execute a client command that hits the server, print its fingerprint.
   diff    Fetch your fingerprint and diff it against a reference profile.
@@ -62,14 +63,23 @@ func Run(args []string) int {
 func cmdServe(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	addr := fs.String("addr", ":8443", "listen address")
+	cert := fs.String("cert", "", "TLS certificate PEM (optional; self-signed if unset)")
+	key := fs.String("key", "", "TLS private key PEM (optional; required with --cert)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	srv, err := server.New(*addr)
+	if (*cert == "") != (*key == "") {
+		return fail(fmt.Errorf("serve: --cert and --key must be given together"))
+	}
+	srv, err := server.New(*addr, *cert, *key)
 	if err != nil {
 		return fail(err)
 	}
-	fmt.Printf("fpcheck listening on %s (https, h2 + http/1.1)\n", *addr)
+	mode := "self-signed cert"
+	if *cert != "" {
+		mode = "cert " + *cert
+	}
+	fmt.Printf("fpcheck listening on %s (https, h2 + http/1.1, %s)\n", *addr, mode)
 	if err := srv.ListenAndServe(); err != nil {
 		return fail(err)
 	}

@@ -32,10 +32,20 @@ type Server struct {
 	cfg  *tls.Config
 }
 
-// New builds a Server listening on addr with a freshly generated self-signed
-// certificate and both h2 and http/1.1 advertised via ALPN.
-func New(addr string) (*Server, error) {
-	cert, err := selfSignedCert()
+// New builds a Server listening on addr with both h2 and http/1.1 advertised
+// via ALPN. If certFile and keyFile are both non-empty, that PEM keypair is
+// loaded (use a real certificate to host a public demo on a domain); otherwise
+// a self-signed certificate is generated for local use.
+func New(addr, certFile, keyFile string) (*Server, error) {
+	var (
+		cert tls.Certificate
+		err  error
+	)
+	if certFile != "" && keyFile != "" {
+		cert, err = tls.LoadX509KeyPair(certFile, keyFile)
+	} else {
+		cert, err = selfSignedCert()
+	}
 	if err != nil {
 		return nil, err
 	}

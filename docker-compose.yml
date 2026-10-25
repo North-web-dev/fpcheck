@@ -1,0 +1,16 @@
+# Minimal self-host. fpcheck terminates TLS itself, so expose it directly or
+# put it behind a TCP/SNI passthrough proxy (see README "Self-host"). It must
+# NOT sit behind a TLS-terminating HTTP proxy or it will fingerprint the proxy.
+services:
+  fpcheck:
+    build: .
+    # Or pull a pinned release instead of building:
+    # image: ghcr.io/north-web-dev/fpcheck:v0.2.0
+    restart: unless-stopped
+    command: ["serve", "--addr", ":8443"]
+    ports:
+      - "8443:8443"
+    # To serve a real certificate (public demo on a domain):
+    # command: ["serve", "--addr", ":8443", "--cert", "/certs/fullchain.pem", "--key", "/certs/privkey.pem"]
+    # volumes:
+    #   - /etc/letsencrypt/live/fp.example.com:/certs:ro
